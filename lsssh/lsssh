@@ -1,0 +1,41 @@
+#!/bin/sh
+
+
+# ssh config
+home_dir=$(getent passwd ${USER} | cut -d: -f6)
+ssh_config="${home_dir}/.ssh/config"
+escaped_home=$(
+  echo "${home_dir}"                                                            |
+  sed -e 's/\//\\\//g' -e 's/ /\\ /g'
+)
+
+_tmp=$(mktemp /tmp/XXXXXXXXXX)
+_tmp2=$(mktemp /tmp/XXXXXXXXXX)
+
+cat ${ssh_config}                                                               |
+  tr -d " "                                                                     |
+  grep -i "^include"                                                            |
+  sed -e "s/include//i"                                                         |
+  sed -e "s/\~/${escaped_home}/g" -e "s/^/find /" -e "s/$/ -type f/"            |
+    while read -r line; do
+    # リストを処理する処理
+      eval "$line"                                                              >> ${_tmp}
+    done
+
+echo "Host  Hostname"                                                           > ${_tmp2}
+echo "--------------------  --------------------"                               >> ${_tmp2}
+
+cat ${_tmp} |  uniq                                                       |
+  while read -r line; do
+    echo "["$(basename $line)"]" >> ${_tmp2}
+    cat $line | sed -e "s/^[ \t]*//" |grep -i "^host"                           |
+      sed -e "s/^host[ \t][ \t]*\(.*\)/\1/i"                                    \
+          -e "s/^hostname[ \t][ \t]*\(.*\)/|\1/i"                               |
+      sed -z "s/\n|/|/g"                                                        |
+      sed -e "s/[ \t][ \t]*/\//" -e "s/|/ /"                                    >> ${_tmp2}
+      echo "@@@"                                                                >> ${_tmp2}
+  done
+cat ${_tmp2} | column -t | sed -e "s/@@@//"
+
+rm ${_tmp}
+rm ${_tmp2}
